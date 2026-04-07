@@ -1,6 +1,11 @@
 import { Request, Response } from 'express'
 import * as queueService from '../services/queueService'
 import { JoinQueueBody } from '../types'
+import {
+  emitQueueUpdate,
+  emitEntryCalled,
+  emitShopStatus
+} from '../socket/socketHandler'
 
 // GET /api/queue/:slug
 // Returns the full waiting queue for a shop
@@ -10,7 +15,6 @@ export async function getQueue(req: Request, res: Response) {
     const shop = await queueService.getShopBySlug(req.params.slug as string)
 
     if (!shop) {
-      // 404 means "not found"
       return res.status(404).json({ message: 'Shop not found' })
     }
 
@@ -23,7 +27,6 @@ export async function getQueue(req: Request, res: Response) {
     })
   } catch (err) {
     console.error('getQueue error:', err)
-    // 500 means "internal server error" — something unexpected went wrong
     res.status(500).json({ message: 'Server error' })
   }
 }
@@ -73,7 +76,6 @@ export async function joinQueue(req: Request, res: Response) {
     }
 
     if (!shop.is_open) {
-      // 400 means "bad request" — the client did something they shouldn't have
       return res.status(400).json({ message: 'Shop is currently closed' })
     }
 
@@ -89,7 +91,10 @@ export async function joinQueue(req: Request, res: Response) {
       party_size
     )
 
-    // 201 means "created" — something new was successfully created
+    // Get io from the Express app and broadcast the update
+    const io = req.app.get('io')
+    await emitQueueUpdate(io, shop.slug, shop.id)
+
     res.status(201).json({
       message: 'Successfully joined the queue',
       entry,
@@ -112,9 +117,25 @@ export async function updateEntry(req: Request, res: Response) {
       return res.status(400).json({ message: 'Invalid status' })
     }
 
-    const entry = await queueService.updateEntryStatus(req.params.entryId as string, status)
+    const entry = await queueService.updateEntryStatus(
+      req.params.entryId as string,
+      status
+    )
     if (!entry) {
       return res.status(404).json({ message: 'Queue entry not found' })
+    }
+
+    const shop = await queueService.getShopBySlug(req.params.slug as string)
+    const io = req.app.get('io')
+
+    // If staff called a customer, notify that specific customer
+    if (status === 'called') {
+      emitEntryCalled(io, entry.id, entry.customer_name)
+    }
+
+    // Broadcast updated queue to all staff/customers watching
+    if (shop) {
+      await emitQueueUpdate(io, shop.slug, shop.id)
     }
 
     res.json({ message: 'Entry updated', entry })
@@ -135,6 +156,10 @@ export async function toggleShop(req: Request, res: Response) {
     }
 
     const updated = await queueService.toggleShopStatus(shop.id, !shop.is_open)
+
+    const io = req.app.get('io')
+    emitShopStatus(io, shop.slug, updated?.is_open ?? false)
+
     res.json({
       message: `Shop is now ${updated?.is_open ? 'open' : 'closed'}`,
       shop: updated
