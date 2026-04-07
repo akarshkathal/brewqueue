@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import queueRoutes from './routes/queueRoutes'
+import authRoutes from './routes/authRoutes'
 
 const app = express()
 
@@ -11,7 +12,6 @@ app.use(cors({
 
 app.use(express.json())
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -20,8 +20,7 @@ app.get('/health', (req, res) => {
   })
 })
 
-// Mount queue routes
-// Any request to /api/queue/... will be handled by queueRoutes
 app.use('/api/queue', queueRoutes)
+app.use('/api/auth', authRoutes)
 
 export default app
