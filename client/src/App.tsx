@@ -4,6 +4,7 @@ import CustomerJoin from './pages/CustomerJoin'
 import CustomerStatus from './pages/CustomerStatus'
 import StaffLogin from './pages/StaffLogin'
 import StaffDashboard from './pages/StaffDashboard'
+import NotFound from './pages/NotFound'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth()
@@ -16,6 +17,7 @@ export default function App() {
       <Route path="/shop/:slug" element={<CustomerJoin />} />
       <Route path="/shop/:slug/status/:entryId" element={<CustomerStatus />} />
       <Route path="/staff/login" element={<StaffLogin />} />
+      <Route path="*" element={<NotFound />} />
       <Route
         path="/staff/dashboard"
         element={

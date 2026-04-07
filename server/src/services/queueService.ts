@@ -69,19 +69,34 @@ export async function updateEntryStatus(
   status: 'called' | 'served' | 'cancelled'
 ): Promise<QueueEntry | null> {
 
-  // We also record WHEN the status changed
-  // called_at is set when status becomes 'called'
-  // served_at is set when status becomes 'served'
-  const result = await pool.query<QueueEntry>(
-    `UPDATE queue_entries
-     SET 
-       status = $1,
-       called_at = CASE WHEN $1 = 'called' THEN NOW() ELSE called_at END,
-       served_at = CASE WHEN $1 = 'served' THEN NOW() ELSE served_at END
-     WHERE id = $2
-     RETURNING *`,
-    [status, entryId]
-  )
+  // Use separate queries based on status to avoid type confusion
+  let result
+
+  if (status === 'called') {
+    result = await pool.query<QueueEntry>(
+      `UPDATE queue_entries
+       SET status = $1, called_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [status, entryId]
+    )
+  } else if (status === 'served') {
+    result = await pool.query<QueueEntry>(
+      `UPDATE queue_entries
+       SET status = $1, served_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [status, entryId]
+    )
+  } else {
+    result = await pool.query<QueueEntry>(
+      `UPDATE queue_entries
+       SET status = $1
+       WHERE id = $2
+       RETURNING *`,
+      [status, entryId]
+    )
+  }
 
   return result.rows[0] || null
 }
